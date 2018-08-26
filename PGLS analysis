@@ -32,3 +32,46 @@ mytree2<-read.nexus("C:/Users/Connor/Documents/Masters Work/Dissertation/B10k/Cu
 tree.consensus2 = consensus(mytree2, p = 0.5)
 tree2 = compute.brlen(tree.consensus2, 1)
 
+#ceate a data frame containing all the variables for analysis
+select.traits<-data.frame(b10k$Unique_Scientific_Name,b10k$SexualSelectionUnidirectional, b10k$Migration, b10k$Habitat, b10k$Bill_Nares, b10k$SpecGenFinalMass, b10k$Latitude_mean, b10k$Territory.2016)
+
+#create a new column replacing spaces in species names so they are identical to phylogenetic tree names
+select.traits2 = select.traits
+select.traits2$scientific_name <- gsub(" ","_",select.traits$b10k.Unique_Scientific_Name)
+
+#log transform and z-standardise necessary variables in the PGLS
+log.select.traits2<- select.traits2 %>% mutate_at(vars(b10k.Bill_Nares,b10k.SpecGenFinalMass),funs(log))
+scale.log.select.traits2<- log.select.traits2 %>% mutate_at(vars(b10k.SexualSelectionUnidirectional:b10k.Territory.2016),funs(scale))
+
+#match row names from data frame and tree
+select.traits.b10k<-select.traits2[match(tree2$tip.label,select.traits2$scientific_name),]
+combined.trait.data<-comparative.data(data = scale.log.select.traits2,phy=tree2,names.col = "scientific_name",vcv = TRUE, warn.dropped = TRUE)
+
+# Modelling outline
+
+#load pPCA scores data
+pPCAScores_song_2<-read.csv("pPCAScores_song_final.csv")
+
+#rename select traits data frame so any changes will not affect other analysis
+model.traits.b10k<-select.traits.b10k
+
+#create all binary variables necessary: example 
+index3 = model.traits.b10k$b10k.Habitat != 3
+model.traits.b10k$binary_habitat = model.traits.b10k$b10k.Habitat
+model.traits.b10k$binary_habitat[index3] = 1
+
+#log transform and z-standardise necessary variables 
+log.model.traits.b10k<-model.traits.b10k %>% mutate_at(vars(b10k.Bill_Nares,b10k.SpecGenFinalMass),funs(log))
+scale.log.model.b10k<- log.model.traits.b10k %>% mutate_at(vars(b10k.SexualSelectionUnidirectional:b10k.Territory.2016),funs(scale))
+
+#create new data frame combining pPCA scores data and transformed trait data frame
+select.traits3<-data.frame(scale.log.model.b10k, pPCAScores_song_2)
+
+#combine new data frame with tree
+dataset = comparative.data(data=select.traits3,phy=tree2,names.col = "scientific_name",vcv = TRUE, warn.dropped = TRUE)
+
+#run models: outline
+Model<-pgls(PC1~binary_sel+binary_habitat+b10k.Bill_Nares+b10k.SpecGenFinalMass+b10k.Latitude_mean+binary_ter,data=dataset,lambda="ML")
+
+#visualise model output
+summary(Model)
